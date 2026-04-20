@@ -1,7 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "aether-track.fullname" . }}
+  name: {{ include "aether-app.fullname" . }}
+  labels:
+    {{- include "aether-app.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
   ports:
@@ -10,4 +12,4 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app: aether-track
+    {{- include "aether-app.selectorLabels" . | nindent 4 }}

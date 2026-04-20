@@ -2,23 +2,21 @@ pipeline {
     agent any
 
     environment {
-        // Change this to your Docker Hub ID
         DOCKER_HUB_USER = 'malaynew07'
         APP_NAME        = 'aether-track'
-        IMAGE_TAG       = "${env.BUILD_NUMBER}"
+        IMAGE_TAG       = "v1.0.${env.BUILD_NUMBER}" // Standard versioning
         
-        // Credentials IDs from Jenkins UI
         WEATHER_API_KEY = credentials('weather-api-key')
         GEMINI_API_KEY  = credentials('gemini-api-key')
         DOCKER_HUB_CREDS = credentials('docker-hub-creds')
+        GITHUB_CREDS    = credentials('github-creds') 
     }
 
     stages {
         stage('Checkout & Cleanup') {
             steps {
                 checkout scm
-                // Clear old logs to ensure the AI Agent reads fresh errors
-                sh 'rm -f build_error.log'
+                sh 'rm -f build_error.log *.tgz' // Clean old packages
             }
         }
 
@@ -26,49 +24,56 @@ pipeline {
             steps {
                 script {
                     try {
-                        // Standard Docker Build
                         sh "docker build -t ${DOCKER_HUB_USER}/${APP_NAME}:${IMAGE_TAG} ."
-                        sh "docker build -t ${DOCKER_HUB_USER}/${APP_NAME}:latest ."
-                        
-                        // Docker Login and Push
                         sh "echo ${DOCKER_HUB_CREDS_PSW} | docker login -u ${DOCKER_HUB_CREDS_USR} --password-stdin"
                         sh "docker push ${DOCKER_HUB_USER}/${APP_NAME}:${IMAGE_TAG}"
-                        sh "docker push ${DOCKER_HUB_USER}/${APP_NAME}:latest"
                     } catch (Exception e) {
-                        // CAPTURE ERROR: This is the 'Self-Healing' trigger
-                        sh "echo 'BUILD FAILURE LOG START' > build_error.log"
-                        // Capturing the last 100 lines of the Docker build attempt
+                        sh "echo 'BUILD FAILURE' > build_error.log"
                         sh "docker build -t ${DOCKER_HUB_USER}/${APP_NAME}:${IMAGE_TAG} . 2>> build_error.log || true"
-                        error("Build failed. AI Agent is analyzing the logs...")
+                        error("Build failed. AI Agent is analyzing...")
                     }
                 }
             }
         }
 
-        stage('Manifest Update') {
-            /* In a real SRE workflow, this stage would use 'sed' to update 
-               the image tag in k8s/helm-chart/values.yaml and push back to Git.
-            */
+        stage('Helm Packaging') {
             steps {
-                echo "Image pushed: ${DOCKER_HUB_USER}/${APP_NAME}:${IMAGE_TAG}"
-                echo "ArgoCD will now sync the 'latest' tag to the cluster."
+                script {
+                    // Update Chart.yaml version to match Build Number
+                    sh "sed -i 's/^version: .*/version: 0.1.${env.BUILD_NUMBER}/' k8s/aether-app/Chart.yaml"
+                    sh "sed -i 's/^appVersion: .*/appVersion: \"${IMAGE_TAG}\"/' k8s/aether-app/Chart.yaml"
+                    
+                    // Create the .tgz package
+                    sh "helm package k8s/aether-app"
+                    echo "Helm package created: aether-app-0.1.${env.BUILD_NUMBER}.tgz"
+                }
+            }
+        }
+
+        stage('GitOps Update') {
+            steps {
+                script {
+                    // Update the image tag in values.yaml for ArgoCD
+                    sh "sed -i 's/tag: .*/tag: \"${IMAGE_TAG}\"/' k8s/aether-app/values.yaml"
+                    
+                    sh """
+                        git config user.email "malaynew07@gmail.com"
+                        git config user.name "Malaynew07"
+                        git add k8s/aether-app/values.yaml k8s/aether-app/Chart.yaml
+                        git commit -m "chore: release 0.1.${env.BUILD_NUMBER} [skip ci]"
+                    """
+                    
+                    withCredentials([usernamePassword(credentialsId: 'github-creds', passwordVariable: 'GIT_PASS', usernameVariable: 'GIT_USER')]) {
+                        sh "git push https://${GIT_USER}:${GIT_PASS}@github.com/${GIT_USER}/Aether-Track.git HEAD:main"
+                    }
+                }
             }
         }
     }
 
     post {
         failure {
-            echo "Pipeline Failed! Triggering AI Agent Analysis..."
-            // Run the Python AI script we created earlier
             sh "python3 cicd/ai_healer.py build_error.log"
-            
-            // Send standard Jenkins email notification
-            mail to: 'malaypanigrahi52@gmail.com',
-                 subject: "Aether-Track Build #${env.BUILD_NUMBER} Failed",
-                 body: "The build failed. The AI Agent has analyzed the build_error.log and printed the fix in the Jenkins Console Output."
-        }
-        success {
-            echo "Build successful! Application is ready for ArgoCD sync."
         }
     }
 }

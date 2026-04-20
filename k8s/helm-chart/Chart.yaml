@@ -1,6 +1,0 @@
-apiVersion: v2
-name: aether-track
-description: A Helm chart for the AI-Powered Weather Dashboard
-type: application
-version: 0.1.0
-appVersion: "1.0.0"

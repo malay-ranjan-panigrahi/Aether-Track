@@ -1,11 +1,12 @@
 import os
 from flask import Flask, render_template, request
 import requests
+from prometheus_flask_exporter import PrometheusMetrics
 
 app = Flask(__name__)
 
-# Senior Engineer Note: We pull the key from the environment.
-# If it's missing, the app will still start but will display an error on the UI.
+metrics = PrometheusMetrics(app)
+metrics.info('app_info', 'Aether-Track', version='1.0.0')
 API_KEY = os.getenv('WEATHER_API_KEY')
 
 @app.route('/')
