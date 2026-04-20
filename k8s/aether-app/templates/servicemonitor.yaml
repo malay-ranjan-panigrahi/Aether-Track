@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "aether-app.fullname" . }}
+  labels:
+    # IMPORTANT: This must match the 'release' label of your Prometheus stack
+    # Based on your pod names, the release is 'kind-prometheus'
+    release: kind-prometheus
+spec:
+  selector:
+    matchLabels:
+      {{- include "aether-app.selectorLabels" . | nindent 6 }}
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
