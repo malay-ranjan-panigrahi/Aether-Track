@@ -72,24 +72,22 @@ pipeline {
     }
 
     post {
+         always {
+            echo "Pipeline finished with status: ${currentBuild.currentResult}"
+        }
         success {
-             echo "✅ Build #${env.BUILD_NUMBER} succeeded — image ${DOCKER_HUB_USER}/${APP_NAME}:${IMAGE_TAG} pushed and GitOps updated."
+             echo "✅ Build #${env.BUILD_NUMBER} succeeded — image ${DOCKER_HUB_USER}/${APP_NAME}:${IMAGE_TAG} pushed and GitOps updated."            
+        }
+        failure {
+            sh "/var/lib/jenkins/ai-venv/bin/python cicd/ai_healer.py build_error.log"
+        }
+        cleanup {
             // removes dangling images (untaged Image).
             sh "docker image prune -f || true"
             // clears the Helm package and error log
             sh "rm -f *.tgz build_error.log || true"
             // wipes the Jenkins workspace
             cleanWs()
-
-
-
-
-        }
-        failure {
-            sh "/var/lib/jenkins/ai-venv/bin/python cicd/ai_healer.py build_error.log"
-        }
-        always {
-            echo "Pipeline finished with status: ${currentBuild.currentResult}"
         }
     }
 }
