@@ -157,12 +157,12 @@ volumeMounts: []
 
 env:
   - name: WEATHER_API_KEY
-    valuesFrom:
+    valueFrom:
       secretKeyRef:
         name: aether-secrets
         key: weather-api-key
   - name: GEMINI_API_KEY
-    valuesFrom:
+    valueFrom:
       secretKeyRef:
         name: aether-secrets
         key: gemini-api-key
