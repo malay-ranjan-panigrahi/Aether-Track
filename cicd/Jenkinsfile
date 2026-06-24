@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB_USER = 'malaynew07'
+        DOCKER_HUB_USER = 'malay-ranjan-panigrahi'
         APP_NAME        = 'aether-track'
         IMAGE_TAG       = "v1.0.${env.BUILD_NUMBER}" // Standard versioning
         
@@ -73,7 +73,7 @@ pipeline {
 
     post {
         failure {
-            sh "python3 cicd/ai_healer.py build_error.log"
+            sh "/var/lib/jenkins/ai-venv/bin/python cicd/ai_healer.py build_error.log"
         }
     }
 }
