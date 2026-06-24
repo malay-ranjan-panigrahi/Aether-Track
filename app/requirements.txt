@@ -2,4 +2,3 @@ flask
 requests
 gunicorn
 prometheus-flask-exporter
-thispackagedoesnotexist123
