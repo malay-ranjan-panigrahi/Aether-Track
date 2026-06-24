@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB_USER = 'malay-ranjan-panigrahi'
+        DOCKER_HUB_USER = 'malaynew07'
         APP_NAME        = 'aether-track'
         IMAGE_TAG       = "v1.0.${env.BUILD_NUMBER}" // Standard versioning
         
@@ -58,7 +58,7 @@ pipeline {
                     
                     sh """
                         git config user.email "malaynew07@gmail.com"
-                        git config user.name "Malaynew07"
+                        git config user.name "malay-ranjan-panigrahi"
                         git add k8s/aether-app/values.yaml k8s/aether-app/Chart.yaml
                         git commit -m "chore: release 0.1.${env.BUILD_NUMBER} [skip ci]"
                     """
