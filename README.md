@@ -1,12 +1,8 @@
-<div align="center">
-
 # 🌩️ Aether-Track
 
-### Agentic AI-Driven DevOps & GitOps Platform
+### Self-Taught DevOps & GitOps Pipeline with AI-Assisted Failure Diagnosis
 
-*An enterprise-grade weather analytics platform demonstrating a complete end-to-end GitOps lifecycle, with an AI Self-Healer that diagnoses build failures in real time.*
-
----
+A hands-on portfolio project demonstrating an end-to-end GitOps delivery lifecycle on Kubernetes — with an **AI agent that diagnoses build failures and suggests fixes**. Built on a local cluster to demonstrate the full workflow.
 
 ![Jenkins](https://img.shields.io/badge/Jenkins-D24939?style=for-the-badge&logo=jenkins&logoColor=white)
 ![ArgoCD](https://img.shields.io/badge/ArgoCD-EF7B4D?style=for-the-badge&logo=argo&logoColor=white)
@@ -15,26 +11,24 @@
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 ![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)
 ![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white)
-![Gemini AI](https://img.shields.io/badge/Gemini_AI-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
-
-![Status](https://img.shields.io/badge/status-production--ready-success)
-![Build](https://img.shields.io/badge/build-passing-brightgreen)
-![License](https://img.shields.io/badge/license-MIT-blue)
-
-</div>
+![Gemini](https://img.shields.io/badge/Gemini_API-8E75B2?style=for-the-badge&logo=google&logoColor=white)
 
 ---
 
-## 📖 Table of Contents
+<!-- TODO: Record a short GIF of the pipeline running + the AI healer output, embed here.
+     A screen-capture GIF is the most effective "animation" GitHub allows (it strips JS/CSS).
+     Recommended: capture the Jenkins failure then ai_healer.py printing its remediation block. -->
+<!-- ![Demo](docs/demo.gif) -->
 
+## 📖 Table of Contents
 - [Overview](#-overview)
 - [Architecture](#-architecture)
 - [Key Features](#-key-features)
 - [Tech Stack](#-tech-stack)
 - [Repository Structure](#-repository-structure)
 - [Quick Start](#-quick-start)
-- [Monitoring & Observability](#-monitoring--observability)
+- [Monitoring](#-monitoring)
 - [Engineering Decisions](#-engineering-decisions)
 - [Roadmap](#-roadmap)
 - [Author](#-author)
@@ -43,197 +37,168 @@
 
 ## 🎯 Overview
 
-**Aether-Track** is a weather analytics platform — but the application is the vehicle, not the point. The real project is the **production-grade delivery pipeline** around it.
+Aether-Track deploys a simple Flask weather app — but **the app is the vehicle, not the point.** The real project is the automated delivery pipeline around it, and what happens when a build breaks.
 
-It solves three common SRE pain points at once:
+It demonstrates three things I wanted to learn end-to-end:
 
-| Problem | Aether-Track's Answer |
-|---------|----------------------|
-| 🔄 **Drift between Git and cluster state** | Pull-based GitOps with ArgoCD auto-sync |
-| 🐛 **Slow post-failure triage** | AI agent analyzes build logs and proposes fixes |
-| 📊 **Observability gaps on custom apps** | ServiceMonitor CRDs + Four Golden Signals dashboards |
+| Focus | How Aether-Track addresses it |
+|---|---|
+| 🔄 Keeping cluster state in sync with Git | Pull-based GitOps with ArgoCD auto-sync |
+| 🐛 Faster failure triage | An AI agent reads build logs and proposes a root cause + fix |
+| 📊 Kubernetes-native monitoring | Prometheus + Grafana, with a ServiceMonitor for app metrics |
 
 ---
 
 ## 🏗️ Architecture
 
-```mermaid
+\`\`\`mermaid
 flowchart LR
-    DEV[👨‍💻 Developer] -->|git push| GH[GitHub Repo]
-    GH -->|webhook| JENKINS[Jenkins CI]
+    DEV[Developer Push] --> JENKINS[Jenkins CI]
+    JENKINS -->|build & push image| REG[(Docker Hub)]
+    JENKINS -->|helm package| HELM[Helm Chart]
+    JENKINS -->|update values.yaml + commit| GIT[(Git Repo)]
+    GIT -->|watches & syncs| ARGO[ArgoCD]
+    ARGO -->|deploy| K8S[Kubernetes Cluster]
+    K8S --> PROM[Prometheus]
+    PROM --> GRAF[Grafana]
+    JENKINS -.->|on failure| AI[ai_healer.py]
+    AI -.->|logs to Gemini| REPORT[Root-Cause Suggestion]
+\`\`\`
 
-    JENKINS -->|build & test| DOCKER[Docker Build]
-    DOCKER -->|push tagged image| REG[(Docker Hub)]
-    JENKINS -->|sed update| VALUES[values.yaml]
-    VALUES -->|commit back| GH
-
-    GH -->|pull & reconcile| ARGO[ArgoCD]
-    ARGO -->|deploy Helm chart| K8S[Kubernetes Cluster]
-
-    K8S -->|scrape metrics| PROM[Prometheus]
-    PROM --> GRAF[Grafana Dashboards]
-
-    JENKINS -.->|on failure| AI[🤖 AI Self-Healer]
-    AI -.->|Gemini API| REPORT[Root-Cause Report]
-
-    style AI fill:#8E75B2,stroke:#333,color:#fff
-    style ARGO fill:#EF7B4D,stroke:#333,color:#fff
-    style JENKINS fill:#D24939,stroke:#333,color:#fff
-```
-
-> The pipeline is **pull-based** (ArgoCD reconciles from Git) rather than push-based — which means the cluster state is always recoverable from version control, and rollbacks are just `git revert`.
+The pipeline is **pull-based** — ArgoCD reconciles the cluster from Git, rather than Jenkins pushing directly to the cluster. This keeps Git as the single source of truth, so rollbacks are a \`git revert\` and the cluster state is always recoverable from version control.
 
 ---
 
 ## ⚙️ Key Features
 
 ### 1. 🔁 Automated GitOps Workflow
+- **CI (Jenkins):** builds the Docker image, pushes to Docker Hub, packages the Helm chart, applies build-number versioning.
+- **CD (ArgoCD):** watches \`k8s/aether-app/\` and reconciles the cluster to match Git.
+- **Closed loop:** on a successful build, Jenkins updates the image tag in \`values.yaml\` and commits it back to Git — no manual manifest edits.
 
-A true pull-based delivery model where **Git is the single source of truth**.
+### 2. 🤖 AI-Assisted Failure Diagnosis
+A custom Python agent (\`ai_healer.py\`) that runs on build failure.
 
-- **CI (Jenkins):** Builds Docker images, packages Helm charts, applies semantic versioning
-- **CD (ArgoCD):** Continuously watches `k8s/aether-app/` and reconciles cluster state to match Git
-- **Closed Loop:** Jenkins programmatically updates `values.yaml` on successful image pushes via `sed` — no manual manifest edits, no "it works on my cluster" drift
+| Stage | What happens |
+|---|---|
+| **Trigger** | Fires automatically in the Jenkins \`post { failure }\` block |
+| **Context** | Reads \`build_error.log\` and extracts the failure output |
+| **Analysis** | Sends the log to the Google Gemini API with an SRE-oriented prompt |
+| **Output** | Prints a structured root cause, suggested fix, and prevention tip |
 
-### 2. 🤖 Agentic AI Self-Healing
+> **Diagnosis-only by design.** The agent *suggests* fixes — it does not apply them. It only sees the build log, not the full application context, so a human reviews and approves any change. This human-in-the-loop guardrail prevents the AI from confidently shipping a wrong fix.
 
-A custom AI agent (`ai_healer.py`) that acts as an always-on L1 debugger.
-
-| Stage | What Happens |
-|-------|--------------|
-| **Trigger** | Automatically fires on any Jenkins build failure |
-| **Context** | Parses `build_error.log` and extracts the failure signal |
-| **Analysis** | Sends context to Google Gemini with an SRE-tuned prompt |
-| **Output** | Delivers root-cause analysis and suggested fix to the engineer |
-
-**Impact:** Cuts Mean Time To Repair (MTTR) by removing the "what even broke?" step from incident response.
-
-### 3. 📡 Full-Stack Observability
-
-Built on the **Prometheus Operator** pattern for declarative, Kubernetes-native monitoring.
-
-- **Custom metrics** exposed via `prometheus-flask-exporter` (request latency, error rates, throughput)
-- **Service discovery** via `ServiceMonitor` CRDs — new services are auto-scraped without editing Prometheus config
-- **Four Golden Signals** dashboards in Grafana: Latency, Traffic, Errors, Saturation
+### 3. 📡 Monitoring
+- Prometheus + Grafana (via \`kube-prometheus-stack\`) for cluster and namespace-level metrics.
+- The Flask app exposes custom metrics on \`/metrics\` via \`prometheus-flask-exporter\`.
+- A \`ServiceMonitor\` is defined to scrape the app's metrics endpoint. *(See Roadmap — the scrape-label wiring is being finalized.)*
 
 ---
 
 ## 🛠️ Tech Stack
 
 | Layer | Tools |
-|-------|-------|
-| **Application** | Python, Flask, `prometheus-flask-exporter` |
-| **Containerization** | Docker (multi-stage builds) |
-| **CI** | Jenkins (Multibranch Pipeline) |
-| **CD / GitOps** | ArgoCD, Helm |
-| **Orchestration** | Kubernetes |
-| **Observability** | Prometheus Operator, Grafana, ServiceMonitor CRDs |
-| **AI Layer** | Google Gemini API |
-| **Registry** | Docker Hub |
+|---|---|
+| Application | Python, Flask, prometheus-flask-exporter, Gunicorn |
+| Containerization | Docker |
+| CI | Jenkins (declarative pipeline) |
+| CD / GitOps | ArgoCD, Helm |
+| Orchestration | Kubernetes |
+| Observability | Prometheus, Grafana, ServiceMonitor |
+| AI Layer | Google Gemini API |
+| Registry | Docker Hub |
 
 ---
 
 ## 📁 Repository Structure
 
-```
+\`\`\`
 aether-track/
-├── app/                      # Python Flask application + weather logic
+├── app/                      # Python Flask weather application
 ├── cicd/
-│   ├── Jenkinsfile           # Multibranch CI pipeline definition
+│   ├── Jenkinsfile           # CI/CD pipeline definition
 │   └── ai_healer.py          # AI agent for build-failure analysis
 ├── k8s/
 │   └── aether-app/           # Helm chart
 │       ├── templates/        # Deployment, Service, ServiceMonitor
-│       ├── values.yaml       # Auto-updated by Jenkins on each build
+│       ├── values.yaml       # Image tag auto-updated by Jenkins
 │       └── Chart.yaml
-├── Dockerfile                # Multi-stage optimized build
+├── Dockerfile
 └── README.md
-```
+\`\`\`
 
 ---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-
-- Kubernetes cluster (v1.25+)
-- Jenkins with `github-creds` and `docker-hub-creds` configured in the Global Credentials store
+- A Kubernetes cluster (this was built and tested on a local KIND cluster)
+- Jenkins with \`github-creds\`, \`docker-hub-creds\`, \`gemini-api-key\`, and \`weather-api-key\` configured in the Credentials store
 - ArgoCD installed in the cluster
-- `kubectl` and `helm` CLIs locally
+- \`kubectl\` and \`helm\` available locally
 
 ### 1. Create the namespace
-
-```bash
+\`\`\`bash
 kubectl create namespace aether-prod
-```
+\`\`\`
 
 ### 2. Provision secrets
-
-```bash
-kubectl create secret generic aether-secrets \
-  --from-literal=weather-api-key=${WEATHER_KEY} \
-  --from-literal=gemini-api-key=${GEMINI_KEY} \
+\`\`\`bash
+kubectl create secret generic aether-secrets \\
+  --from-literal=weather-api-key=\${WEATHER_KEY} \\
+  --from-literal=gemini-api-key=\${GEMINI_KEY} \\
   -n aether-prod
-```
+\`\`\`
 
 ### 3. Configure Jenkins
-
-Create a **Multibranch Pipeline** pointing to this repository. Jenkins will auto-discover the `Jenkinsfile` under `cicd/`.
+Create a pipeline job pointing at this repository; it uses the \`Jenkinsfile\` under \`cicd/\`.
 
 ### 4. Register the ArgoCD application
-
-Point a new ArgoCD Application at the `k8s/aether-app/` path with **Auto-Sync enabled**. From there, every commit that Jenkins pushes triggers a reconciliation.
+Point an ArgoCD Application at the \`k8s/aether-app/\` path with auto-sync enabled. Each commit Jenkins pushes then triggers a reconciliation.
 
 ---
 
-## 📈 Monitoring & Observability
+## 📈 Monitoring
 
-The platform ships pre-configured with a `ServiceMonitor` targeting the `http` port of the weather service.
+- **Cluster & node metrics:** provided out-of-the-box by \`kube-prometheus-stack\` (pre-built Grafana dashboards for nodes, pods, and namespaces).
+- **App metrics:** the Flask app exposes Prometheus metrics at \`/metrics\`; a \`ServiceMonitor\` is defined to scrape them.
 
-| Component | Value |
-|-----------|-------|
-| **Prometheus target** | `aether-app-monitor` |
-| **Grafana — K8s pods** | Import dashboard ID `14191` |
-| **Grafana — Flask metrics** | Import dashboard ID `10751` |
-
-Dashboards cover request rates, p50/p95/p99 latency, error ratios, and pod-level resource saturation.
+> Note: the cluster-level dashboards are live and working. Wiring the app's custom metrics into Prometheus (correcting the ServiceMonitor's release label) is in progress — see Roadmap.
 
 ---
 
 ## 🧠 Engineering Decisions
 
-A few deliberate choices made during design, and *why*:
+A few deliberate choices, and why:
 
-- **No `:latest` tags, ever.** Every image is tagged with the Jenkins build number, making rollbacks deterministic and preventing "mystery deploy" incidents.
-- **Resource requests and limits on every container.** Prevents noisy-neighbor CPU saturation and gives the scheduler real information to work with.
-- **Helm packaging over raw manifests.** Versioned charts mean rollbacks are a single `helm rollback`, not a hunt through git history.
-- **Pull-based over push-based CD.** The cluster asks Git what it should look like, rather than Jenkins telling the cluster. Survives Jenkins outages, survives credential leaks, survives most mistakes.
+- **No \`:latest\` tags.** Every image is tagged with the Jenkins build number, so rollbacks are deterministic and deploys are traceable.
+- **Helm over raw manifests.** Versioned charts make rollbacks a single command instead of a hunt through Git history.
+- **Pull-based (ArgoCD) over push-based CD.** The cluster reconciles itself from Git rather than Jenkins pushing to it — so state survives a Jenkins outage and is always recoverable from version control.
+- **\`cleanup\` post-condition for teardown, not \`always\`.** In Jenkins, \`always\` runs *before* the \`failure\` block — so putting workspace cleanup in \`always\` would delete the log the AI healer needs. Cleanup lives in a \`cleanup\` block, which runs last.
+- **Secrets via Kubernetes Secrets + Jenkins credentials, never in the repo.** Keys are injected at runtime through \`secretKeyRef\` and the Jenkins credential store.
 
 ---
 
 ## 🗺️ Roadmap
 
+- [ ] Fix the ServiceMonitor release label and confirm custom Flask metrics are scraped end-to-end
+- [ ] Build Grafana dashboards for app-level latency / error-rate / throughput
+- [ ] Convert the Jenkins job to a Multibranch Pipeline with branch-gated deploys
 - [ ] Multi-environment promotion (dev → staging → prod) via ArgoCD ApplicationSets
-- [ ] Policy-as-code guardrails with OPA Gatekeeper or Kyverno
-- [ ] Chaos testing with LitmusChaos or Chaos Mesh
-- [ ] SLO-based alerting with Prometheus recording rules
-- [ ] Extend the AI-Healer to act on runtime alerts, not just build failures
+- [ ] Progressive delivery (canary / blue-green) with Argo Rollouts
+- [ ] Migrate the healer from the deprecated \`google.generativeai\` package to \`google.genai\`
+- [ ] Extend the AI agent to act on runtime alerts, not just build failures
 
 ---
 
 ## 👨‍💻 Author
 
 **Malay Ranjan Panigrahi**
-Production Support Engineer → DevOps / SRE in transition
+Technical Support Engineer → transitioning to DevOps / SRE
 📍 Bangalore, India
 
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/malayranjan-panigrahi)
-[![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/malay-ranjan-panigrahi)
+[LinkedIn](https://www.linkedin.com/) · [GitHub](https://github.com/malay-ranjan-panigrahi)
 
 ---
 
-<div align="center">
-
-*If this project was useful to you, consider leaving a ⭐ — it genuinely helps.*
-
-</div>
+*If this project was useful or interesting to you, a ⭐ is appreciated.*
