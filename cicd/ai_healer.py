@@ -25,7 +25,7 @@ def analyze_build():
     print(f"--- AI Agent: Analyzing {log_file} ---")
 
     # 4. Prompt Engineering for SRE Context
-    model = genai.GenerativeModel('gemini-2.0-flash')
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
     
     prompt = f"""
     You are an expert SRE and DevOps Engineer. 
